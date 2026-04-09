@@ -2,46 +2,55 @@ import arcade
 import random
 
 # ---------------- COSTANTI ----------------
-SCREEN_WIDTH = 1000
-SCREEN_HEIGHT = 600
+SCREEN_WIDTH = 1280
+SCREEN_HEIGHT = 720
 SCREEN_TITLE = "Zombie Shooter"
 
 PLAYER_SPEED = 5
 BULLET_SPEED = 10
-ZOMBIE_SPEED = 2
+ZOMBIE_SPEED = 1   
+
+SOUND_SHOT = "./gioco/Shot.wav"
 
 LEVELS = 5
+
 
 # ---------------- PLAYER ----------------
 class Player(arcade.Sprite):
     def __init__(self):
-        # immagine del tuo personaggio
         super().__init__("C:/Users/saulv/Downloads/python/gioco/personaggio.png", scale=0.5)
         self.change_x = 0
         self.change_y = 0
 
-    def update(self):
-        # muove il player
+    def update(self, delta_time):
         self.center_x += self.change_x
         self.center_y += self.change_y
+
+        # blocca dentro lo schermo
+        self.center_x = max(0, min(self.center_x, SCREEN_WIDTH))
+        self.center_y = max(0, min(self.center_y, SCREEN_HEIGHT))
+
 
 # ---------------- ZOMBIE ----------------
 class Zombie(arcade.Sprite):
     def __init__(self, level):
-        # usa raw string o slash normale per Windows
         super().__init__("C:/Users/saulv/Downloads/python/gioco/zombie.png", scale=0.5)
-        self.speed = ZOMBIE_SPEED + level
+        self.speed = ZOMBIE_SPEED 
+        self.life = 100
 
-    def update(self):
+    def update(self, delta_time):
         self.center_x -= self.speed
+
 
 # ---------------- PROIETTILE ----------------
 class Bullet(arcade.Sprite):
     def __init__(self):
         super().__init__("C:/Users/saulv/Downloads/python/gioco/proiettile.png", scale=0.8)
+        self.danno = 50
 
-    def update(self):
+    def update(self, delta_time):
         self.center_x += BULLET_SPEED
+
 
 # ---------------- GAME ----------------
 class Game(arcade.Window):
@@ -69,7 +78,7 @@ class Game(arcade.Window):
         self.spawn_zombies()
 
     def spawn_zombies(self):
-        for i in range(5 + self.level * 2):
+        for i in range(4 * self.level):
             zombie = Zombie(self.level)
             zombie.center_x = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + 500)
             zombie.center_y = random.randint(50, SCREEN_HEIGHT - 50)
@@ -82,22 +91,31 @@ class Game(arcade.Window):
         self.zombie_list.draw()
         self.bullet_list.draw()
 
-        arcade.draw_text(f"Livello: {self.level}", 10, 550, arcade.color.WHITE, 16)
-        arcade.draw_text(f"Punti: {self.score}", 10, 520, arcade.color.WHITE, 16)
+        arcade.draw_text(f"Livello: {self.level}", 10, 680, arcade.color.WHITE, 16)
+        arcade.draw_text(f"Punti: {self.score}", 10, 700, arcade.color.WHITE, 16)
 
     # ---------------- UPDATE ----------------
     def on_update(self, delta_time):
-        self.player_list.update()      # muove il player
-        self.zombie_list.update()      # muove gli zombie
-        self.bullet_list.update()      # muove i proiettili
+        self.player_list.update()
+        self.zombie_list.update()
+        self.bullet_list.update()
 
         # collisioni proiettili
         for bullet in self.bullet_list:
             hit_list = arcade.check_for_collision_with_list(bullet, self.zombie_list)
+
             for zombie in hit_list:
-                zombie.remove_from_sprite_lists()
+                zombie.life -= bullet.danno
                 bullet.remove_from_sprite_lists()
-                self.score += 1
+
+                if zombie.life <= 0:
+                    zombie.remove_from_sprite_lists()
+                    self.score += 1
+
+        # rimuovi proiettili fuori schermo
+        for bullet in self.bullet_list:
+            if bullet.center_x > SCREEN_WIDTH:
+                bullet.remove_from_sprite_lists()
 
         # zombie che toccano player
         if arcade.check_for_collision_with_list(self.player, self.zombie_list):
@@ -107,6 +125,7 @@ class Game(arcade.Window):
         # livello completato
         if len(self.zombie_list) == 0:
             self.level += 1
+
             if self.level > LEVELS:
                 print("HAI VINTO!")
                 arcade.close_window()
@@ -130,6 +149,7 @@ class Game(arcade.Window):
             bullet.center_x = self.player.center_x
             bullet.center_y = self.player.center_y
             self.bullet_list.append(bullet)
+            arcade.Sound(SOUND_SHOT).play(volume = 25)
 
     def on_key_release(self, key, modifiers):
         if key in (arcade.key.W, arcade.key.S):
@@ -137,11 +157,13 @@ class Game(arcade.Window):
         elif key in (arcade.key.A, arcade.key.D):
             self.player.change_x = 0
 
+
 # ---------------- MAIN ----------------
 def main():
     game = Game()
     game.setup()
     arcade.run()
+
 
 if __name__ == "__main__":
     main()
