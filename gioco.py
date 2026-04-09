@@ -13,7 +13,7 @@ ZOMBIE_BASE_SPEED = 1
 SOUND_SHOT = "Shot.wav"
 
 LEVELS = 5
-LANE_Y = SCREEN_HEIGHT // 2
+LANE_Y = SCREEN_HEIGHT // 5
 
 MAX_BULLETS = 2
 SHOOT_COOLDOWN = 0.25  # cooldown minimo tra un colpo e l'altro
@@ -22,7 +22,7 @@ SHOOT_COOLDOWN = 0.25  # cooldown minimo tra un colpo e l'altro
 # ---------------- PLAYER ----------------
 class Player(arcade.Sprite):
     def __init__(self):
-        super().__init__("personaggio.png", scale=0.5)
+        super().__init__("personaggio.png", scale=1)
         self.change_x = 0
 
     def update(self, delta_time):
@@ -34,7 +34,7 @@ class Player(arcade.Sprite):
 # ---------------- ZOMBIE ----------------
 class Zombie(arcade.Sprite):
     def __init__(self, level):
-        super().__init__("zombie.png", scale=0.5)
+        super().__init__("zombie.png", scale=1)
         self.speed = ZOMBIE_BASE_SPEED + (level * 0.5)
         self.life = 100 + (level * 20)
         self.center_y = LANE_Y
