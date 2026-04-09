@@ -8,35 +8,36 @@ SCREEN_TITLE = "Zombie Shooter"
 
 PLAYER_SPEED = 5
 BULLET_SPEED = 10
-ZOMBIE_SPEED = 1   
+ZOMBIE_BASE_SPEED = 1   
 
-SOUND_SHOT = "./gioco/Shot.wav"
+SOUND_SHOT = "Shot.wav"
 
 LEVELS = 5
+LANE_Y = SCREEN_HEIGHT // 2
+
+MAX_BULLETS = 2
+SHOOT_COOLDOWN = 0.25  # cooldown minimo tra un colpo e l'altro
 
 
 # ---------------- PLAYER ----------------
 class Player(arcade.Sprite):
     def __init__(self):
-        super().__init__("C:/Users/saulv/Downloads/python/gioco/personaggio.png", scale=0.5)
+        super().__init__("personaggio.png", scale=0.5)
         self.change_x = 0
-        self.change_y = 0
 
     def update(self, delta_time):
         self.center_x += self.change_x
-        self.center_y += self.change_y
-
-        # blocca dentro lo schermo
+        self.center_y = LANE_Y
         self.center_x = max(0, min(self.center_x, SCREEN_WIDTH))
-        self.center_y = max(0, min(self.center_y, SCREEN_HEIGHT))
 
 
 # ---------------- ZOMBIE ----------------
 class Zombie(arcade.Sprite):
     def __init__(self, level):
-        super().__init__("C:/Users/saulv/Downloads/python/gioco/zombie.png", scale=0.5)
-        self.speed = ZOMBIE_SPEED 
-        self.life = 100
+        super().__init__("zombie.png", scale=0.5)
+        self.speed = ZOMBIE_BASE_SPEED + (level * 0.5)
+        self.life = 100 + (level * 20)
+        self.center_y = LANE_Y
 
     def update(self, delta_time):
         self.center_x -= self.speed
@@ -45,11 +46,12 @@ class Zombie(arcade.Sprite):
 # ---------------- PROIETTILE ----------------
 class Bullet(arcade.Sprite):
     def __init__(self):
-        super().__init__("C:/Users/saulv/Downloads/python/gioco/proiettile.png", scale=0.8)
+        super().__init__("proiettile.png", scale=0.8)
         self.danno = 50
 
     def update(self, delta_time):
         self.center_x += BULLET_SPEED
+        self.center_y = LANE_Y
 
 
 # ---------------- GAME ----------------
@@ -64,41 +66,76 @@ class Game(arcade.Window):
 
         self.level = 1
         self.score = 0
+        self.hp = 3
+
+        self.spawn_timer = 0
+
+        # cooldown sparo
+        self.can_shoot = True
+        self.shoot_timer = 0
+
+        self.background = None
 
     def setup(self):
+        # carica sfondo
+        self.background = arcade.load_texture("sfondo.png")
+
         self.player_list = arcade.SpriteList()
         self.zombie_list = arcade.SpriteList()
         self.bullet_list = arcade.SpriteList()
 
         self.player = Player()
         self.player.center_x = 100
-        self.player.center_y = SCREEN_HEIGHT // 2
+        self.player.center_y = LANE_Y
         self.player_list.append(self.player)
 
-        self.spawn_zombies()
+        self.spawn_wave()
 
-    def spawn_zombies(self):
+    def spawn_wave(self):
         for i in range(4 * self.level):
-            zombie = Zombie(self.level)
-            zombie.center_x = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + 500)
-            zombie.center_y = random.randint(50, SCREEN_HEIGHT - 50)
-            self.zombie_list.append(zombie)
+            self.spawn_zombie()
+
+    def spawn_zombie(self):
+        zombie = Zombie(self.level)
+        zombie.center_x = random.randint(SCREEN_WIDTH, SCREEN_WIDTH + 300)
+        zombie.center_y = LANE_Y
+        self.zombie_list.append(zombie)
 
     # ---------------- DRAW ----------------
     def on_draw(self):
         self.clear()
+        # disegna sfondo
+        arcade.draw_texture_rect(
+            self.background,
+            arcade.XYWH(SCREEN_WIDTH/2, SCREEN_HEIGHT/2, SCREEN_WIDTH, SCREEN_HEIGHT)
+        )
+
         self.player_list.draw()
         self.zombie_list.draw()
         self.bullet_list.draw()
 
         arcade.draw_text(f"Livello: {self.level}", 10, 680, arcade.color.WHITE, 16)
         arcade.draw_text(f"Punti: {self.score}", 10, 700, arcade.color.WHITE, 16)
+        arcade.draw_text(f"HP: {self.hp}", 10, 660, arcade.color.RED, 16)
 
     # ---------------- UPDATE ----------------
     def on_update(self, delta_time):
         self.player_list.update()
         self.zombie_list.update()
         self.bullet_list.update()
+
+        # gestisco cooldown sparo
+        if not self.can_shoot:
+            self.shoot_timer += delta_time
+            if self.shoot_timer >= SHOOT_COOLDOWN:
+                self.can_shoot = True
+                self.shoot_timer = 0
+
+        # spawn continuo zombie
+        self.spawn_timer += delta_time
+        if self.spawn_timer > max(0.5, 2 - self.level * 0.2):
+            self.spawn_timer = 0
+            self.spawn_zombie()
 
         # collisioni proiettili
         for bullet in self.bullet_list:
@@ -112,49 +149,50 @@ class Game(arcade.Window):
                     zombie.remove_from_sprite_lists()
                     self.score += 1
 
-        # rimuovi proiettili fuori schermo
+        # rimuovo proiettili fuori schermo
         for bullet in self.bullet_list:
             if bullet.center_x > SCREEN_WIDTH:
                 bullet.remove_from_sprite_lists()
 
-        # zombie che toccano player
-        if arcade.check_for_collision_with_list(self.player, self.zombie_list):
-            print("GAME OVER")
-            arcade.close_window()
+        # collisione player-zombie
+        hit_list = arcade.check_for_collision_with_list(self.player, self.zombie_list)
+        for zombie in hit_list:
+            zombie.remove_from_sprite_lists()
+            self.hp -= 1
+            print("HP:", self.hp)
 
-        # livello completato
-        if len(self.zombie_list) == 0:
+            if self.hp <= 0:
+                print("GAME OVER")
+                arcade.close_window()
+
+        # aumento livello
+        if self.score >= self.level * 10:
             self.level += 1
+            print("Livello:", self.level)
 
             if self.level > LEVELS:
                 print("HAI VINTO!")
                 arcade.close_window()
-            else:
-                self.spawn_zombies()
 
     # ---------------- INPUT ----------------
     def on_key_press(self, key, modifiers):
-        if key == arcade.key.W:
-            self.player.change_y = PLAYER_SPEED
-        elif key == arcade.key.S:
-            self.player.change_y = -PLAYER_SPEED
-        elif key == arcade.key.A:
+        if key == arcade.key.A:
             self.player.change_x = -PLAYER_SPEED
         elif key == arcade.key.D:
             self.player.change_x = PLAYER_SPEED
 
-        # sparo
+        # sparo moderato: cooldown + limite
         if key == arcade.key.SPACE:
-            bullet = Bullet()
-            bullet.center_x = self.player.center_x
-            bullet.center_y = self.player.center_y
-            self.bullet_list.append(bullet)
-            arcade.Sound(SOUND_SHOT).play(volume = 25)
+            if len(self.bullet_list) < MAX_BULLETS and self.can_shoot:
+                bullet = Bullet()
+                bullet.center_x = self.player.center_x + self.player.width // 2 + 10
+                bullet.center_y = LANE_Y
+                self.bullet_list.append(bullet)
+                arcade.Sound(SOUND_SHOT).play()
+                self.can_shoot = False
 
     def on_key_release(self, key, modifiers):
-        if key in (arcade.key.W, arcade.key.S):
-            self.player.change_y = 0
-        elif key in (arcade.key.A, arcade.key.D):
+        if key in (arcade.key.A, arcade.key.D):
             self.player.change_x = 0
 
 
